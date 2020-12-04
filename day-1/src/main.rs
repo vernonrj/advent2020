@@ -2,7 +2,7 @@ extern crate clap;
 
 use std::error::Error;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
 
 use clap::{App, Arg};
 
@@ -24,7 +24,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .get_matches();
 
     let to_sum: i64 = matches.value_of("numbers").unwrap().parse().unwrap();
-    let input = get_input(matches.value_of("input").unwrap())?;
+    let input_file = File::open(matches.value_of("input").unwrap())?;
+    let input = get_input(input_file)?;
 
     match get_sum_tree(2020, to_sum, &input) {
         Some(nums) => println!("found numbers {:?}, which multiply to {}", nums, nums.iter().copied().product::<i64>()),
@@ -36,11 +37,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 /**
  * slurps data from a file into a vec of integers. One integer per line.
  */
-pub fn get_input(filename: &str) -> io::Result<Vec<i64>> {
-    let input_file = File::open(filename)?;
-
+pub fn get_input(data: impl Read) -> io::Result<Vec<i64>> {
     let mut output = Vec::new();
-    for line in BufReader::new(input_file).lines() {
+    for line in BufReader::new(data).lines() {
         let line: String = line?;
         match line.parse::<i64>() {
             Ok(n) => output.push(n),
@@ -180,4 +179,29 @@ fn test_get_sum_tree() {
     assert_eq!(get_sum_tree(10, 2, &[1, 2, 4]), None);
 
     assert_eq!(get_sum_tree(20, 3, &[1, 2, 4, 6, 10]), Some(vec![10, 6, 4]));
+}
+
+#[test]
+fn test_part_1() {
+    use std::io::Cursor;
+    let data = include_str!("../input.txt");
+    let data = get_input(Cursor::new(data)).unwrap();
+    let numbers = get_sum_to(2020, 2, &data).unwrap();
+
+    assert_eq!(numbers.len(), 2);
+    assert!(numbers[0] != numbers[1]);
+    assert_eq!(numbers.iter().copied().sum::<i64>(), 2020);
+}
+
+#[test]
+fn test_part_2() {
+    use std::io::Cursor;
+    let data = include_str!("../input.txt");
+    let data = get_input(Cursor::new(data)).unwrap();
+    let numbers = get_sum_to(2020, 3, &data).unwrap();
+
+    assert_eq!(numbers.len(), 3);
+    assert!(numbers[0] != numbers[1]);
+    assert!(numbers[0] != numbers[2]);
+    assert_eq!(numbers.iter().copied().sum::<i64>(), 2020);
 }
