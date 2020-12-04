@@ -6,6 +6,10 @@ use std::io::{self, BufRead, BufReader};
 
 use clap::{App, Arg};
 
+mod tree;
+
+use tree::SumTree;
+
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = App::new("day-1")
         .arg(Arg::with_name("input")
@@ -22,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let to_sum: i64 = matches.value_of("numbers").unwrap().parse().unwrap();
     let input = get_input(matches.value_of("input").unwrap())?;
 
-    match get_sum_to(2020, to_sum, &input) {
+    match get_sum_tree(2020, to_sum, &input) {
         Some(nums) => println!("found numbers {:?}, which multiply to {}", nums, nums.iter().copied().product::<i64>()),
         None => eprintln!("No matching numbers found"),
     }
@@ -54,6 +58,14 @@ pub fn get_sum_to(n: i64, to_sum: i64, input: &[i64]) -> Option<Vec<&i64>> {
     Permutations::new(input, to_sum as usize)
         .filter(|perm| perm.into_iter().copied().sum::<i64>() == n)
         .next()
+}
+
+pub fn get_sum_tree(n: i64, to_sum: i64, input: &[i64]) -> Option<Vec<i64>> {
+    let mut t = SumTree::new(to_sum);
+    for each in input {
+        t.insert(*each);
+    }
+    t.find(n)
 }
 
 /**
@@ -158,4 +170,14 @@ fn test_get_sum_to() {
     assert_eq!(get_sum_to(10, 2, &[1, 2, 4]), None);
 
     assert_eq!(get_sum_to(20, 3, &[1, 2, 4, 6, 10]), Some(vec![&4, &6, &10]));
+}
+
+#[test]
+fn test_get_sum_tree() {
+    assert_eq!(get_sum_tree(5, 2, &[1, 2, 3]), Some(vec!(3, 2)));
+    assert_eq!(get_sum_tree(5, 2, &[1, 2, 3, 4]), Some(vec!(4, 1)));
+    assert_eq!(get_sum_tree(5, 2, &[1, 2, 4]), Some(vec!(4, 1)));
+    assert_eq!(get_sum_tree(10, 2, &[1, 2, 4]), None);
+
+    assert_eq!(get_sum_tree(20, 3, &[1, 2, 4, 6, 10]), Some(vec![10, 6, 4]));
 }
