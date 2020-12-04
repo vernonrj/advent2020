@@ -13,12 +13,24 @@ fn main() -> Result<(), Box<dyn Error>> {
             .arg(Arg::with_name("input")
                 .required(true)
                 .help("the input to the program"))
+            .arg(Arg::with_name("policy")
+                .short("p")
+                .long("policy")
+                .takes_value(true)
+                .possible_values(&["range", "xor"])
+                .help("policy to use"))
             .get_matches();
-
+    let variant = match matches.value_of("policy") {
+        Some("range") | None => PolicyVariant::OccurrenceRange,
+        Some("xor") => PolicyVariant::XorPosition,
+        Some(bad) => panic!("invalid value to --policy: {}", bad),
+    };
     let f = File::open(matches.value_of("input").unwrap())?;
     let input: Vec<String> = get_input(f)?;
     let passwords: Vec<(String, Policy)> = parse_input(input).unwrap();
-    let valid: Vec<(String, Policy)> = passwords.into_iter().filter(|(pass, policy)| policy.is_valid(&pass)).collect();
+    let valid: Vec<(String, Policy)> = passwords.into_iter().filter(|(pass, policy)| {
+        policy.is_valid(&pass, variant)
+    }).collect();
     
     println!("number of valid passwords: {}", valid.len());
     Ok(())
@@ -30,10 +42,39 @@ pub struct Policy {
     pub occurrences: RangeInclusive<i64>,
 }
 
+#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
+pub enum PolicyVariant {
+    /// letters must occur within the range given
+    OccurrenceRange,
+    /// a letter must occur in either the start or end position, not both
+    XorPosition,
+}
+
 impl Policy {
-    pub fn is_valid(&self, password: &str) -> bool {
-        let policy_occs = password.matches(&self.letter).count();
-        self.occurrences.contains(&(policy_occs as i64))
+    pub fn is_valid(&self, password: &str, variant: PolicyVariant) -> bool {
+        match variant {
+            PolicyVariant::OccurrenceRange => {
+                let policy_occs = password.matches(&self.letter).count();
+                self.occurrences.contains(&(policy_occs as i64))
+            },
+            PolicyVariant::XorPosition => {
+                let chars: Vec<char> = password.chars().collect();
+                let start = match ((*self.occurrences.start()) as usize).checked_sub(1) {
+                    Some(n) => n,
+                    None => return false,
+                };
+                let end = match ((*self.occurrences.end()) as usize).checked_sub(1) {
+                    Some(n) => n,
+                    None => return false,
+                };
+                match (chars.get(start), chars.get(end)) {
+                    (Some(c), Some(d)) if c == d => false,
+                    (Some(c), _) if c.to_string() == self.letter => true,
+                    (_, Some(c)) if c.to_string() == self.letter => true,
+                    (_, _) => false,
+                }
+            }
+        }
     }
 }
 
@@ -95,7 +136,22 @@ fn test_part_1() {
     let data = include_str!("../input.txt");
     let data = get_input(Cursor::new(data)).unwrap();
     let passwords: Vec<(String, Policy)> = parse_input(data).unwrap();
-    let valid: Vec<(String, Policy)> = passwords.into_iter().filter(|(pass, policy)| policy.is_valid(&pass)).collect();
+    let valid: Vec<(String, Policy)> = passwords.into_iter().filter(|(pass, policy)| {
+        policy.is_valid(&pass, PolicyVariant::OccurrenceRange)
+    }).collect();
+    assert_eq!(valid.len(), 638);
+}
+
+#[test]
+fn test_part_2() {
+    use std::io::Cursor;
+    let data = include_str!("../input.txt");
+    let data = get_input(Cursor::new(data)).unwrap();
+    let passwords: Vec<(String, Policy)> = parse_input(data).unwrap();
+    let valid: Vec<(String, Policy)> = passwords.into_iter().filter(|(pass, policy)| {
+        policy.is_valid(&pass, PolicyVariant::XorPosition)
+    }).collect();
+    assert_eq!(valid.len(), 699);
 }
 
 #[test]
@@ -128,8 +184,12 @@ fn test_parse_input() {
 
 #[test]
 fn test_is_policy_valid() {
-    assert!(Policy { letter: "a".to_string(), occurrences: 1..=3 }.is_valid("abcde"));
-    assert!(Policy { letter: "a".to_string(), occurrences: 1..=3 }.is_valid("aaabcde"));
-    assert!(! Policy { letter: "b".to_string(), occurrences: 1..=3 }.is_valid("cdefg"));
-    assert!(Policy { letter: "c".to_string(), occurrences: 2..=9 }.is_valid("ccccccccc"));
+    assert!(Policy { letter: "a".to_string(), occurrences: 1..=3 }.is_valid("abcde", PolicyVariant::OccurrenceRange));
+    assert!(Policy { letter: "a".to_string(), occurrences: 1..=3 }.is_valid("aaabcde", PolicyVariant::OccurrenceRange));
+    assert!(! Policy { letter: "b".to_string(), occurrences: 1..=3 }.is_valid("cdefg", PolicyVariant::OccurrenceRange));
+    assert!(Policy { letter: "c".to_string(), occurrences: 2..=9 }.is_valid("ccccccccc", PolicyVariant::OccurrenceRange));
+
+    assert!(Policy { letter: "a".to_string(), occurrences: 1..=3 }.is_valid("abcde", PolicyVariant::XorPosition));
+    assert!(! Policy { letter: "b".to_string(), occurrences: 1..=3 }.is_valid("cdefg", PolicyVariant::XorPosition));
+    assert!(! Policy { letter: "c".to_string(), occurrences: 2..=9 }.is_valid("ccccccccc", PolicyVariant::XorPosition));
 }
