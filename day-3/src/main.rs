@@ -12,14 +12,36 @@ fn main() -> Result<(), Box<dyn Error>> {
             .required(true)
             .takes_value(true)
             .help("input file for the day"))
+        .arg(Arg::with_name("check-all")
+            .short("c")
+            .long("check-all")
+            .help("check slopes of 1, 1/3, 1/5, 1/7, and 2"))
         .get_matches();
 
     let f = File::open(matches.value_of("input").unwrap())?;
     let field = Field::from_reader(f)?;
 
-    let num_trees = count_trees(&field);
+    if matches.is_present("check-all") {
+        // check a series of slopes for trees. The input data is listed below as an array tuples of (right, down).
+        let slopes = [
+            (1, 1),
+            (3, 1),
+            (5, 1),
+            (7, 1),
+            (1, 2),
+        ];
+        let nums_trees: Vec<u64> = slopes.iter()
+            .map(|(right, down)| count_trees(&field, *right, *down))
+            .collect();
+            
+        println!("trees encountered: {:?}", nums_trees);
+        println!("product: {}", nums_trees.into_iter().product::<u64>());
+    } else {
+        // just check a slope of right 3, down 1
+        let num_trees = count_trees(&field, 3, 1);
 
-    println!("number of trees encountered: {}", num_trees);
+        println!("number of trees encountered: {}", num_trees);
+    }
     
     Ok(())
 }
@@ -27,15 +49,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 /**
  * Counts the number of trees encountered while toboggoning down a field
  */
-pub fn count_trees(field: &Field) -> u64 {
+pub fn count_trees(field: &Field, slope_right: usize, slope_down: usize) -> u64 {
     let mut row = 0;
     let mut trees = 0;
-    for column in field {
+    for column in field.into_iter().step_by(slope_down) {
         match column[row] {
             Coordinate::Tree => trees += 1,
             _ => (),
         }
-        row += 3;
+        row += slope_right;
     }
     trees
 }
@@ -149,9 +171,29 @@ fn test_part_1() {
     let input = include_str!("../input.txt");
     let field = Field::from_reader(Cursor::new(input)).unwrap();
 
-    let num_trees = count_trees(&field);
+    let num_trees = count_trees(&field, 3, 1);
     assert_eq!(num_trees, 162);
 }
+
+#[test]
+fn test_part_2() {
+    use std::io::Cursor;
+    let input = include_str!("../input.txt");
+    let field = Field::from_reader(Cursor::new(input)).unwrap();
+    let slopes = [
+        (1, 1),
+        (3, 1),
+        (5, 1),
+        (7, 1),
+        (1, 2),
+    ];
+    let nums_trees: Vec<u64> = slopes.iter()
+        .map(|(right, down)| count_trees(&field, *right, *down))
+        .collect();
+    assert_eq!(nums_trees, vec![80, 162, 77, 83, 37]);
+    assert_eq!(nums_trees.iter().copied().product::<u64>(), 3064612320);
+}
+
 
 #[test]
 fn test_coordinate_from_char() {
@@ -220,5 +262,36 @@ fn test_count_trees() {
              ".#..#...#.#"].join("\n")
     );
     let field = Field::from_reader(input).unwrap();
-    assert_eq!(count_trees(&field), 7);
+    assert_eq!(count_trees(&field, 3, 1), 7);
+}
+
+#[test]
+fn test_count_trees_vary_slope() {
+    use std::io::Cursor;
+    let input = Cursor::new(
+        vec!["..##.......",
+             "#...#...#..",
+             ".#....#..#.",
+             "..#.#...#.#",
+             ".#...##..#.",
+             "..#.##.....",
+             ".#.#.#....#",
+             ".#........#",
+             "#.##...#...",
+             "#...##....#",
+             ".#..#...#.#"].join("\n")
+    );
+    let field = Field::from_reader(input).unwrap();
+    let slopes = [
+        (1, 1),
+        (3, 1),
+        (5, 1),
+        (7, 1),
+        (1, 2),
+    ];
+    let nums_trees: Vec<u64> = slopes.iter()
+        .map(|(right, down)| count_trees(&field, *right, *down))
+        .collect();
+    assert_eq!(nums_trees, vec![2, 7, 3, 4, 2]);
+    assert_eq!(nums_trees.iter().copied().product::<u64>(), 336);
 }
