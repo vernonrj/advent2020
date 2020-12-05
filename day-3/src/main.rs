@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let nums_trees: Vec<u64> = slopes.iter()
             .map(|(right, down)| count_trees(&field, *right, *down))
             .collect();
-            
+
         println!("trees encountered: {:?}", nums_trees);
         println!("product: {}", nums_trees.into_iter().product::<u64>());
     } else {
@@ -50,14 +50,14 @@ fn main() -> Result<(), Box<dyn Error>> {
  * Counts the number of trees encountered while toboggoning down a field
  */
 pub fn count_trees(field: &Field, slope_right: usize, slope_down: usize) -> u64 {
-    let mut row = 0;
+    let mut column = 0;
     let mut trees = 0;
-    for column in field.into_iter().step_by(slope_down) {
-        match column[row] {
+    for row in field.into_iter().step_by(slope_down) {
+        match row[column] {
             Coordinate::Tree => trees += 1,
             _ => (),
         }
-        row += slope_right;
+        column += slope_right;
     }
     trees
 }
