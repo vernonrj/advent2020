@@ -1,8 +1,14 @@
+#[macro_use] extern crate lazy_static;
+
+use std::convert::TryFrom;
 use std::{error::Error, str::FromStr};
 use std::fs::File;
 use std::io::{Read, BufRead, BufReader};
 
 use clap::{App, Arg};
+
+mod validated_passport;
+use validated_passport::ValidatedPassport;
 
 type AppResult<T> = Result<T, Box<dyn Error>>;
 
@@ -12,19 +18,32 @@ fn main() -> AppResult<()> {
             .required(true)
             .takes_value(true)
             .help("the input file for the day"))
+        .arg(Arg::with_name("validate")
+            .long("validate")
+            .help("Validate the passport fields (for part 2)"))
         .get_matches();
     
     let f = File::open(matches.value_of("input").unwrap())?;
     let batch_lines = read_batch(f)?;
 
-    let num_valid = batch_lines.into_iter()
-        .flat_map(|line| Passport::from_str(&line).ok())
-        .count();
+    // we don't care about the passports themselves - just that they're valid.
+    // So we'll run the conversions, and then count up the valid ones left.
+    let passport_iter = batch_lines.into_iter()
+        .flat_map(|line| Passport::from_str(&line).ok());
+
+    let num_valid = if matches.is_present("validate") {
+        // we'll do additional validation here
+        passport_iter.flat_map(ValidatedPassport::try_from).count()
+    } else {
+        passport_iter.count()
+    };
     
     println!("number of valid passports: {}", num_valid);
 
     Ok(())
 }
+
+
 
 /**
  * implements a Passport, with optional Country ID
