@@ -19,6 +19,9 @@ fn main() {
     let filename = matches.value_of("input").unwrap();
     let has_shiny_gold_bag = part_1(File::open(filename).unwrap()).unwrap();
     println!("{} bags can contain it", has_shiny_gold_bag);
+
+    let bags_in_shiny_gold_bag = part_2(File::open(filename).unwrap(), "shiny gold").unwrap();
+    println!("{} bags within a shiny gold bag", bags_in_shiny_gold_bag);
 }
 
 /**
@@ -37,6 +40,29 @@ pub fn part_1(input: impl Read) -> Result<usize, Box<dyn Error>> {
 
     let found: BTreeSet<String> = bags.contains("shiny gold").collect();
     Ok(found.len())
+}
+
+pub fn part_2(input: impl Read, bag_type: &str) -> Result<u32, Box<dyn Error>> {
+    let lines: Result<Vec<String>, _> = BufReader::new(input)
+    .lines()
+    .collect();
+    let lines = lines?;
+
+    let mut bags = Bags::new();
+    for each_line in lines {
+        bags.insert_by_line(&each_line);
+    }
+
+    let it = match bags.contents_recursive(bag_type) {
+        Some(bags) => bags,
+        None => return Err(format!("no bags found").into()),
+    };
+
+    let map = it.fold(BTreeMap::new(), |mut m, (key, val)| {
+        *m.entry(key).or_insert(0u32) += val;
+        m
+    });
+    Ok(map.values().sum())
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -82,20 +108,21 @@ impl Bags {
         
         found.into_iter()
     }
-    // pub fn contents(&self, key: &str) -> Option<impl Iterator<Item=(String, u32)>> {
-    //     self.rules.get(key).map(|hm| hm.clone().into_iter())
-    // }
-    // pub fn contents_recursive(&self, key: &str) -> Option<impl Iterator<Item=(String, u32)>> {
-    //     let mut output: Vec<(String, u32)> = Vec::new();
-    //     let found = self.contents(key)?;
-    //     for (key, num) in found {
-    //         output.push((key.clone(), num));
-    //         if let Some(it) = self.contents_recursive(&key) {
-    //             output.extend(it);
-    //         }
-    //     }
-    //     Some(output.into_iter())
-    // }
+    pub fn contents(&self, key: &str) -> Option<impl Iterator<Item=(String, u32)>> {
+        self.rules.get(key).map(|hm| hm.clone().into_iter())
+    }
+    pub fn contents_recursive(&self, key: &str) -> Option<impl Iterator<Item=(String, u32)>> {
+        let mut output: Vec<(String, u32)> = Vec::new();
+        let found = self.contents(key)?;
+        for (key, num) in found {
+            output.push((key.clone(), num));
+            if let Some(it) = self.contents_recursive(&key) {
+                let it_mult = it.map(|(key, oldnum)| (key, num*oldnum));
+                output.extend(it_mult);
+            }
+        }
+        Some(output.into_iter())
+    }
 }
 
 #[test]
@@ -106,43 +133,64 @@ fn test_bag_insert() {
 }
 
 
-// #[test]
-// fn test_contents() {
-//     let mut b = Bags::new();
-//     b.insert_by_line("light red bags contain 1 bright white bag, 2 muted yellow bags.");
+#[test]
+fn test_contents() {
+    let mut b = Bags::new();
+    b.insert_by_line("light red bags contain 1 bright white bag, 2 muted yellow bags.");
 
-//     assert_eq!(b.contents("light red").unwrap().collect::<Vec<_>>(), vec![("bright white".to_string(), 1u32), ("muted yellow".to_string(), 2u32)]);
-// }
+    assert_eq!(b.contents("light red").unwrap().collect::<Vec<_>>(), vec![("bright white".to_string(), 1u32), ("muted yellow".to_string(), 2u32)]);
+}
 
-// #[test]
-// fn test_contents_recursive() {
-//     let rules = [
-//         "light red bags contain 1 bright white bag, 2 muted yellow bags.",
-//         "dark orange bags contain 3 bright white bags, 4 muted yellow bags.",
-//         "bright white bags contain 1 shiny gold bag.",
-//         "muted yellow bags contain 2 shiny gold bags, 9 faded blue bags.",
-//         "shiny gold bags contain 1 dark olive bag, 2 vibrant plum bags.",
-//         "dark olive bags contain 3 faded blue bags, 4 dotted black bags.",
-//         "vibrant plum bags contain 5 faded blue bags, 6 dotted black bags.",
-//         "faded blue bags contain no other bags.",
-//         "dotted black bags contain no other bags.",
-//     ];
-//     let mut b = Bags::new();
-//     for each in rules.iter() {
-//         b.insert_by_line(*each);
-//     }
+#[test]
+fn test_contents_recursive() {
+    let rules = [
+        "light red bags contain 1 bright white bag, 2 muted yellow bags.",
+        "dark orange bags contain 3 bright white bags, 4 muted yellow bags.",
+        "bright white bags contain 1 shiny gold bag.",
+        "muted yellow bags contain 2 shiny gold bags, 9 faded blue bags.",
+        "shiny gold bags contain 1 dark olive bag, 2 vibrant plum bags.",
+        "dark olive bags contain 3 faded blue bags, 4 dotted black bags.",
+        "vibrant plum bags contain 5 faded blue bags, 6 dotted black bags.",
+        "faded blue bags contain no other bags.",
+        "dotted black bags contain no other bags.",
+    ];
+    let mut b = Bags::new();
+    for each in rules.iter() {
+        b.insert_by_line(*each);
+    }
 
-//     /* bright white bags can hold:
-//      * - shiny gold
-//      *   - dark olive
-//      *     - faded blue
-//      *     - dotted black
-//      *   - vibrant plum
-//      *     - faded blue
-//      *     - dotted black
-//      */
-//     assert_eq!(b.contents_recursive("bright white").unwrap().collect::<Vec<_>>(),
-//                vec![("shiny gold".to_string(), 1),
-//                     ("dark olive".to_string(), 1u32), ("dotted black".to_string(), 4), ("faded blue".to_string(), 3),
-//                     ("vibrant plum".to_string(), 2), ("dotted black".to_string(), 6), ("faded blue".to_string(), 5)]);
-// }
+    /* bright white bags can hold:
+     * - shiny gold
+     *   - dark olive
+     *     - faded blue
+     *     - dotted black
+     *   - vibrant plum
+     *     - faded blue
+     *     - dotted black
+     */
+    assert_eq!(b.contents_recursive("bright white").unwrap().collect::<Vec<_>>(),
+               vec![("shiny gold".to_string(), 1),
+                    ("dark olive".to_string(), 1u32), ("dotted black".to_string(), 4), ("faded blue".to_string(), 3),
+                    ("vibrant plum".to_string(), 2), ("dotted black".to_string(), 6), ("faded blue".to_string(), 5)]);
+}
+
+#[test]
+fn test_part_2() {
+    use std::io::Cursor;
+    let rules = vec![
+        "light red bags contain 1 bright white bag, 2 muted yellow bags.",
+        "dark orange bags contain 3 bright white bags, 4 muted yellow bags.",
+        "bright white bags contain 1 shiny gold bag.",
+        "muted yellow bags contain 2 shiny gold bags, 9 faded blue bags.",
+        "shiny gold bags contain 1 dark olive bag, 2 vibrant plum bags.",
+        "dark olive bags contain 3 faded blue bags, 4 dotted black bags.",
+        "vibrant plum bags contain 5 faded blue bags, 6 dotted black bags.",
+        "faded blue bags contain no other bags.",
+        "dotted black bags contain no other bags.",
+    ];
+    assert_eq!(part_2(Cursor::new(rules.join("\n")), "faded blue").unwrap(), 0);
+    assert_eq!(part_2(Cursor::new(rules.join("\n")), "dotted black").unwrap(), 0);
+    assert_eq!(part_2(Cursor::new(rules.join("\n")), "vibrant plum").unwrap(), 11);
+    assert_eq!(part_2(Cursor::new(rules.join("\n")), "dark olive").unwrap(), 7);
+    assert_eq!(part_2(Cursor::new(rules.join("\n")), "shiny gold").unwrap(), 32);
+}
