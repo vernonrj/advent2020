@@ -1,14 +1,43 @@
 use std::collections::{VecDeque, HashMap};
+use std::error::Error;
 
 fn main() {
     let input: Vec<i64> = include_str!("../input.txt").lines().map(|line| line.parse().unwrap()).collect();
-    let mut window = CipherWindow::new(25);
+    let invalid_number = find_invalid_number(25, &input).unwrap();
+    println!("couldn't insert value {}", invalid_number);
+    let cypher_break = find_contiguous_sum(invalid_number, &input).unwrap();
+    println!("cypher weakness: {}", cypher_break);
+}
+
+pub fn find_invalid_number(window_size: usize, input: &[i64]) -> Result<i64, Box<dyn Error>> {
+    let mut window = CipherWindow::new(window_size);
     for value in input.iter() {
         match window.insert(*value) {
             Ok(_) => (),
-            Err(_) => println!("couldn't insert value {}", value),
+            Err(_) => {
+                return Ok(*value);
+            }
         }
     }
+    Err(format!("All numbers were valid").into())
+}
+
+pub fn find_contiguous_sum(value_to_find: i64, input: &[i64]) -> Result<i64, Box<dyn Error>> {
+    for winsize in 2..input.len() {
+        let found = input.windows(winsize)
+            .filter(|window| (*window).iter().sum::<i64>() == value_to_find)
+            .next();
+        
+        match found {
+            Some(n) => {
+                let mut v = Vec::from(n);
+                v.sort();
+                return Ok(v.first().unwrap() + v.last().unwrap());
+            }
+            None => (),
+        }
+    }
+    Err(format!("couldn't find it").into())
 }
 
 pub struct CipherWindow {
